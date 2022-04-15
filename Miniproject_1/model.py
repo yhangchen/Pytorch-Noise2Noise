@@ -14,7 +14,12 @@ except:
     from .others.utils import *
     from .others.unet import *
 
-from torch.utils.tensorboard import SummaryWriter
+logged = True
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except:
+    # when tensorboard is not installed, don't log.
+    logged = False
 
 
 class Model():
@@ -53,7 +58,7 @@ class Model():
             self.model = self.model.cuda()
             self.loss = self.loss.cuda()
 
-        self.writer = SummaryWriter()
+        self.writer = SummaryWriter() if logged else None
 
     def load_pretrained_model(self) -> None:
         path2best = os.path.join(self.params.ckpt, 'bestmodel.pth')
@@ -92,8 +97,9 @@ class Model():
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
-            self.writer.add_scalar('Loss/train', train_loss / (batch_idx + 1),
-                                   epoch)
+
+            self.writer.add_scalar('Loss/train', train_loss /
+                                   (batch_idx + 1), epoch) if logged else None
 
             val_loss = 0
             val_psnr = 0
@@ -114,10 +120,10 @@ class Model():
                     val_psnr_bth += psnr(denoised_source[i], target[i])
                 val_psnr_bth /= self.params.batch_size
                 val_psnr += val_psnr_bth
-            self.writer.add_scalar('Loss/Val', val_loss / (batch_idx + 1),
-                                   epoch)
-            self.writer.add_scalar('PSNR/Val', val_psnr / (batch_idx + 1),
-                                   epoch)
+            self.writer.add_scalar('Loss/Val', val_loss /
+                                   (batch_idx + 1), epoch) if logged else None
+            self.writer.add_scalar('PSNR/Val', val_psnr /
+                                   (batch_idx + 1), epoch) if logged else None
             if val_psnr > best_psnr:
                 if not os.path.isdir(self.params.save_dir):
                     os.mkdir(self.params.save_dir)
