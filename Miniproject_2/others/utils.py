@@ -1,5 +1,7 @@
 from torch import empty, rand
 import math
+import torch
+import matplotlib.pyplot as plt
 
 class Module(object):
     def __init__(self) -> None:
@@ -163,3 +165,29 @@ class Linear(Module):
         return [(self.weight, self.dl_dw), (self.bias, self.dl_db)]
     
 
+if __name__ == '__main__':
+    x = rand(3, 5)
+    y = torch.ones(3,1)*1
+    
+    seq_model = Sequential(
+    Linear(5, 10),
+    ReLU(),
+    Linear(10, 1),   
+    )
+    
+    optimizer = SGD(seq_model.param(), 0.05)
+    criterion = MSELoss()    
+    loss = math.inf
+    
+    loss_hist = []
+    while loss >= 0.001:
+        pred = seq_model.forward(x)
+        optimizer.zero_grad()
+        loss = criterion.forward(pred, y)
+        dloss = criterion.backward()
+        print(loss.item())
+        loss_hist.append(loss.item())
+        seq_model.backward(dloss)
+        optimizer.step()
+    plt.plot(loss_hist)
+    plt.show()
