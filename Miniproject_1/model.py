@@ -58,7 +58,7 @@ class Model():
             self.model = self.model.cuda()
             self.loss = self.loss.cuda()
 
-        self.writer = SummaryWriter() if logged else None
+        self.writer = SummaryWriter(comment=self.params.comment) if logged else None
 
     def load_pretrained_model(self) -> None:
         path2best = os.path.join(self.params.ckpt, 'bestmodel.pth')
@@ -144,8 +144,9 @@ class Model():
                                                  targets.float().div(255.0))
         return DataLoader(dataset,
                           batch_size=self.params.batch_size,
-                          shuffle=False,
-                          sampler=sampler)
+                          shuffle=False, # sampler option is mutually exclusive with shuffle
+                          sampler=sampler,
+                          drop_last=True)
 
     def load_raw(self, name):
         return torch.load(os.path.join(self.params.data_dir, name))
@@ -203,6 +204,10 @@ class Model():
                             help='noise type',
                             choices=['gaussian', 'poisson', 'text', 'monte'],
                             default='gaussian',
+                            type=str)
+        parser.add_argument('--comment',
+                            help='runs comment',
+                            default='',
                             type=str)
 
         params = parser.parse_args()
