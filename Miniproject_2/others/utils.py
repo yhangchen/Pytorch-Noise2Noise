@@ -1,4 +1,4 @@
-from torch import empty, rand
+from torch import empty, rand, repeat_interleave,zeros
 import math
 import torch
 import matplotlib.pyplot as plt
@@ -222,6 +222,44 @@ class Conv2d(Module):
     def param(self):
         return [(self.weight, self.dl_dw), (self.bias, self.dl_db)]
 
+class Upsample2d(Module):
+    """
+    Upsample of 2-d images, here we assume the input is [N, Cin, Hin, Win]
+    """
+    def __init__(self, scale_factor, in_channels, out_channels, kernel_size=3, bias=True, dilation=1, stride=1, padding=0) -> None:
+        super().__init__()
+        self.scale_factor = scale_factor
+        self.conv = Conv2d(in_channels, out_channels, kernel_size, bias, dilation, stride, padding)
+        
+    def nearest_neighbor_sampling(self, inp, scale_factor):
+        """
+        Input tensor shape:
+        N, C, H, W
+        Input scale_factor: int
+        Output tensor shape:
+        N, C, sf*H, sf*W
+        """
+        assert isinstance(scale_factor, int), 'Scale factor should be integer type!'
+
+        inter = repeat_interleave(inp, repeats=scale_factor, dim=-1)
+        ret = repeat_interleave(inter, repeats=scale_factor, dim=-2)
+        return ret
+    
+    def forward(self, x):
+        conv_in = self.nearest_neighbor_sampling(x, self.scale_factor)
+        conv_out = self.conv.forward(conv_in)
+        return conv_out
+    
+    def backward(self, grdwrtoutput):
+        dl_dw = self.conv.backward(grdwrtoutput)
+        dl_dx = zeros(dl_dw.size(0), dl_dw.size(1), dl_dw.size(2)//self.scale_factor, dl_dw.size(3)//self.scale_factor)
+        for i in range(dl_dw.size(2)):
+            for j in range(dl_dw.size(3)):
+                dl_dx[:, :, i//self.scale_factor, j//self.scale_factor] += dl_dw[:, :, i, j]
+        return dl_dx
+    
+    def param(self):
+        return self.conv.param()
 
 if __name__ == '__main__':
     x = rand(3, 5)
