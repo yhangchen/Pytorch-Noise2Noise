@@ -32,6 +32,7 @@ class UNet(nn.Module):
             nn.Conv2d(48, 48, 3, stride=1, padding=1),
             nn.LeakyReLU(negative_slope=0.1),
             nn.Upsample(scale_factor=2, mode='nearest'))
+            # nn.ConvTranspose2d(48, 48, 3, stride=2, padding=1, output_padding=1))
 
         self._block_4 = nn.Sequential(
             nn.Conv2d(96, 96, 3, stride=1, padding=1),
@@ -39,6 +40,7 @@ class UNet(nn.Module):
             nn.Conv2d(96, 96, 3, stride=1, padding=1),
             nn.LeakyReLU(negative_slope=0.1),
             nn.Upsample(scale_factor=2, mode='nearest'))
+            # nn.ConvTranspose2d(96, 96, 3, stride=2, padding=1, output_padding=1))
 
         self._block_5_1 = nn.Sequential(
             nn.Conv2d(144, 96, 3, stride=1, padding=1),
@@ -46,6 +48,7 @@ class UNet(nn.Module):
             nn.Conv2d(96, 96, 3, stride=1, padding=1),
             nn.LeakyReLU(negative_slope=0.1),
             nn.Upsample(scale_factor=2, mode='nearest'))
+            # nn.ConvTranspose2d(96, 96, 3, stride=2, padding=1, output_padding=1))
 
         self._block_5_2 = nn.Sequential(
             nn.Conv2d(144, 96, 3, stride=1, padding=1),
@@ -53,6 +56,7 @@ class UNet(nn.Module):
             nn.Conv2d(96, 96, 3, stride=1, padding=1),
             nn.LeakyReLU(negative_slope=0.1),
             nn.Upsample(scale_factor=2, mode='nearest'))
+            # nn.ConvTranspose2d(96, 96, 3, stride=2, padding=1, output_padding=1))
 
         self._block_5_3 = nn.Sequential(
             nn.Conv2d(144, 96, 3, stride=1, padding=1),
@@ -60,6 +64,7 @@ class UNet(nn.Module):
             nn.Conv2d(96, 96, 3, stride=1, padding=1),
             nn.LeakyReLU(negative_slope=0.1),
             nn.Upsample(scale_factor=2, mode='nearest'))
+            # nn.ConvTranspose2d(96, 96, 3, stride=2, padding=1, output_padding=1))
 
         self._block_6 = nn.Sequential(
             nn.Conv2d(96 + in_channels, 64, 3, stride=1, padding=1),
