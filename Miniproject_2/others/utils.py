@@ -1,6 +1,5 @@
-from torch import empty, rand, repeat_interleave,zeros
+from torch import empty, rand, repeat_interleave, zeros, exp, einsum, ones
 import math
-import torch
 import matplotlib.pyplot as plt
 from torch.nn.functional import unfold, fold
 
@@ -40,11 +39,11 @@ class sigmoid(Module):
     
     def forward(self, input):
         self.input = input
-        out = 1.0 / (1 + torch.exp(-input))
+        out = 1.0 / (1 + exp(-input))
         return out
     
     def backward(self, gradwrtoutput):
-        sig = 1.0 / (1 + torch.exp(-self.input))
+        sig = 1.0 / (1 + exp(-self.input))
         return gradwrtoutput * (1 - sig) * sig
     
     def param(self):
@@ -151,14 +150,14 @@ class Linear(Module):
         
     def forward(self, input):
         self.input = input
-        ret = torch.einsum('oi,ni->no',self.weight, self.input)
+        ret = einsum('oi,ni->no',self.weight, self.input)
         if self.use_bias:
             return ret + self.bias
         return ret
     
     def backward(self, grdwrtoutput):
-        dl_dx = torch.einsum('oi,no->ni', self.weight, grdwrtoutput)
-        self.dl_dw.add_(torch.einsum('no,ni->oi', grdwrtoutput, self.input))
+        dl_dx = einsum('oi,no->ni', self.weight, grdwrtoutput)
+        self.dl_dw.add_(einsum('no,ni->oi', grdwrtoutput, self.input))
         self.dl_db.add_(grdwrtoutput.mean())
         return dl_dx
         
@@ -176,8 +175,7 @@ class Conv2d(Module):
         self.use_bias = bias
         
         # torch initialization
-        n = self.in_channels
-        n *= kernel_size**2
+        n = 5
         stdv = 1. / math.sqrt(n)
         
         self.weight = empty(out_channels, in_channels, kernel_size, kernel_size).uniform_(-stdv, stdv)
@@ -196,10 +194,10 @@ class Conv2d(Module):
         self.x = x
         self.unfolded = unfold(x, kernel_size = self.kernel_size, dilation=self.dilation, padding=self.padding, stride=self.stride)
         weight = self.weight.reshape(self.out_channels, -1)
-        wxb = torch.einsum('ow,bws->bso', weight, self.unfolded)
+        wxb = einsum('ow,bws->bso', weight, self.unfolded)
         if self.use_bias:
             wxb += self.bias
-        wxb = torch.einsum('bso->bos', wxb)
+        wxb = einsum('bso->bos', wxb)
         out_h = math.floor((x.shape[-2] - (self.kernel_size-1)*self.dilation + 2*self.padding - 1) / self.stride + 1)
         out_w = math.floor((x.shape[-1] - (self.kernel_size-1)*self.dilation + 2*self.padding - 1)  / self.stride + 1)
         
@@ -211,11 +209,11 @@ class Conv2d(Module):
         grdwrtoutput = grdwrtoutput.flatten(2, -1)
         weight = self.weight.reshape(self.out_channels, -1)
         # here x is cin*kernelwidth^2 and s is Hout*Wout
-        dl_dx = torch.einsum('ox,nos->nxs', weight, grdwrtoutput)
+        dl_dx = einsum('ox,nos->nxs', weight, grdwrtoutput)
         out_size = (self.x.size(-2), self.x.size(-1))
         dl_dx = fold(dl_dx, output_size=out_size, kernel_size=self.kernel_size, dilation=self.dilation, padding=self.padding, stride=self.stride)
         
-        self.dl_dw.add_(torch.einsum('nos,nxs->ox', grdwrtoutput, self.unfolded).reshape(self.weight.size()))
+        self.dl_dw.add_(einsum('nos,nxs->ox', grdwrtoutput, self.unfolded).reshape(self.weight.size()))
         self.dl_db.add_(grdwrtoutput.transpose(0, 1).flatten(1, -1).mean(1))
         return dl_dx
     
@@ -263,7 +261,7 @@ class Upsample2d(Module):
 
 if __name__ == '__main__':
     x = rand(3, 5)
-    y = torch.ones(3,1)*1
+    y = ones(3,1)*1
     
     # Linear model test
     seq_model = Sequential(
@@ -292,18 +290,18 @@ if __name__ == '__main__':
     # Conv2d test
     model = Sequential(
     Conv2d(3, 5, kernel_size=3, padding=0, stride=1),
-    ReLU(),
+    ReLU()
     )
 
     x = rand(10, 3, 32, 32)
-    y = torch.ones(10, 5, 30, 30)*1
+    y = ones(10, 5, 30, 30)*0.5
 
-    optimizer = SGD(model.param(), 0.0005)
+    optimizer = SGD(model.param(), 0.00001)
     criterion = MSELoss()
 
     loss = 9999
     loss_hist = []
-    while loss >= 0.0001:
+    while loss >= 0.0025:
         pred = model.forward(x)
         optimizer.zero_grad()
         loss = criterion.forward(pred, y)
