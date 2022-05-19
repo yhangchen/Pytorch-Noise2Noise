@@ -123,17 +123,7 @@ class Sequential(Module):
             ret.append(layer.param()[0])
         return ret
             
-            
-class Upsample(Module):
-    def __init__(self) -> None:
-        super().__init__()
         
-    def forward(self, x):
-        pass
-    
-    def backward(self):
-        return []
-    
     
 class Linear(Module):
     def __init__(self, in_dim, out_dim, bias=True) -> None:
@@ -302,6 +292,27 @@ if __name__ == '__main__':
     loss = 9999
     loss_hist = []
     while loss >= 0.0025:
+        pred = model.forward(x)
+        optimizer.zero_grad()
+        loss = criterion.forward(pred, y)
+        dloss = criterion.backward()
+        print(loss.item())
+        loss_hist.append(loss.item())
+        model.backward(dloss)
+        optimizer.step()
+    plt.plot(loss_hist)
+    plt.show()
+
+    # Upsample test
+    x = rand(1, 3, 2, 2)
+    y = ones(1, 5, 6, 6)*1
+    model = Upsample2d(4, 3, 5)
+    optimizer = SGD(model.param(), 0.0001)
+    criterion = MSELoss()
+
+    loss = 9999
+    loss_hist = []
+    while loss >= 0.002:
         pred = model.forward(x)
         optimizer.zero_grad()
         loss = criterion.forward(pred, y)
