@@ -6,3 +6,5 @@ __pycache__
 *.pth
 *.jpg
 *.png
+.vscode/*
+log/*

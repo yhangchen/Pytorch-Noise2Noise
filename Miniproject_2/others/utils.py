@@ -31,6 +31,9 @@ class ReLU(Module):
     def param(self):
         return [(None, None)]
     
+    def __call__(self, input):
+        return self.forward(input)
+    
     
 class sigmoid(Module):
     def __init__(self) -> None:
@@ -48,6 +51,9 @@ class sigmoid(Module):
     
     def param(self):
         return [(None, None)]
+
+    def __call__(self, input):
+        return self.forward(input)
     
 class SGD():
     """Stochastic Gradient Descent
@@ -98,6 +104,9 @@ class MSELoss(Module):
     def param(self):
         return [(None, None)]
     
+    def __call__(self, pred, gt):
+        return self.forward(pred, gt)
+    
     
 class Sequential(Module):
     def __init__(self, *layers) -> None:
@@ -122,6 +131,9 @@ class Sequential(Module):
         for layer in self.modules:
             ret.append(layer.param()[0])
         return ret
+    
+    def __call__(self, input):
+        return self.forward(input)
             
         
     
@@ -153,6 +165,9 @@ class Linear(Module):
         
     def param(self):
         return [(self.weight, self.dl_dw), (self.bias, self.dl_db)]
+
+    def __call__(self, input):
+        return self.forward(input)
     
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, bias=True, dilation=1, stride=1, padding=0):
@@ -210,6 +225,9 @@ class Conv2d(Module):
     def param(self):
         return [(self.weight, self.dl_dw), (self.bias, self.dl_db)]
 
+    def __call__(self, input):
+        return self.forward(input)
+
 class Upsample2d(Module):
     """
     Upsample of 2-d images, here we assume the input is [N, Cin, Hin, Win]
@@ -248,6 +266,9 @@ class Upsample2d(Module):
     
     def param(self):
         return self.conv.param()
+    
+    def __call__(self, input):
+        return self.forward(input)
 
 if __name__ == '__main__':
     x = rand(3, 5)
@@ -266,9 +287,9 @@ if __name__ == '__main__':
     
     loss_hist = []
     while loss >= 0.001:
-        pred = seq_model.forward(x)
+        pred = seq_model(x)
         optimizer.zero_grad()
-        loss = criterion.forward(pred, y)
+        loss = criterion(pred, y)
         dloss = criterion.backward()
         print(loss.item())
         loss_hist.append(loss.item())
@@ -291,10 +312,10 @@ if __name__ == '__main__':
 
     loss = 9999
     loss_hist = []
-    while loss >= 0.0025:
-        pred = model.forward(x)
+    while loss >= 0.01:
+        pred = model(x)
         optimizer.zero_grad()
-        loss = criterion.forward(pred, y)
+        loss = criterion(pred, y)
         dloss = criterion.backward()
         print(loss.item())
         loss_hist.append(loss.item())
@@ -313,9 +334,9 @@ if __name__ == '__main__':
     loss = 9999
     loss_hist = []
     while loss >= 0.002:
-        pred = model.forward(x)
+        pred = model(x)
         optimizer.zero_grad()
-        loss = criterion.forward(pred, y)
+        loss = criterion(pred, y)
         dloss = criterion.backward()
         print(loss.item())
         loss_hist.append(loss.item())
