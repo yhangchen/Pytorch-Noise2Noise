@@ -1,4 +1,4 @@
-from torch import empty, rand, repeat_interleave, zeros, exp, einsum, ones
+from torch import empty, rand, repeat_interleave, zeros, exp, einsum, ones, mean, log10
 import math
 import matplotlib.pyplot as plt
 from torch.nn.functional import unfold, fold
@@ -269,6 +269,10 @@ class Upsample2d(Module):
     
     def __call__(self, input):
         return self.forward(input)
+
+def psnr(denoised, ground_truth):
+    mse = mean((denoised - ground_truth)**2)
+    return -10 * log10(mse + 10**-8)
 
 if __name__ == '__main__':
     x = rand(3, 5)

@@ -125,6 +125,8 @@ class Model():
             self.writer.add_scalar('PSNR/Val', val_psnr /
                                    (batch_idx + 1), epoch) if logged else None
             if val_psnr > best_psnr:
+                best_psnr = val_psnr
+                print('New best_psnr: ', best_psnr/(batch_idx + 1))
                 if not os.path.isdir(self.params.save_dir):
                     os.mkdir(self.params.save_dir)
                 torch.save(self.model.state_dict(), 'bestmodel.pth')
