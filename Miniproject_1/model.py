@@ -14,12 +14,12 @@ except:
     from .others.utils import *
     from .others.unet import *
 
-logged = True
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except:
-    # when tensorboard is not installed, don't log.
-    logged = False
+# logged = True
+# try:
+#     from torch.utils.tensorboard import SummaryWriter
+# except:
+#     # when tensorboard is not installed, don't log.
+#     logged = False
 
 
 class Model():
@@ -58,7 +58,7 @@ class Model():
             self.model = self.model.cuda()
             self.loss = self.loss.cuda()
 
-        self.writer = SummaryWriter(comment=self.params.comment) if logged else None
+        # self.writer = SummaryWriter(comment=self.params.comment)
 
     def load_pretrained_model(self) -> None:
         path2best = os.path.join(self.params.ckpt, 'bestmodel.pth')
@@ -98,8 +98,8 @@ class Model():
                 loss.backward()
                 self.optim.step()
 
-            self.writer.add_scalar('Loss/train', train_loss /
-                                   (batch_idx + 1), epoch) if logged else None
+            # self.writer.add_scalar('Loss/train', train_loss /
+            #                        (batch_idx + 1), epoch)
 
             val_loss = 0
             val_psnr = 0
@@ -120,16 +120,16 @@ class Model():
                     val_psnr_bth += psnr(denoised_source[i], target[i])
                 val_psnr_bth /= self.params.batch_size
                 val_psnr += val_psnr_bth
-            self.writer.add_scalar('Loss/Val', val_loss /
-                                   (batch_idx + 1), epoch) if logged else None
-            self.writer.add_scalar('PSNR/Val', val_psnr /
-                                   (batch_idx + 1), epoch) if logged else None
-            if val_psnr > best_psnr:
-                best_psnr = val_psnr
-                print('New best_psnr: ', best_psnr/(batch_idx + 1))
+            # self.writer.add_scalar('Loss/Val', val_loss /
+            #                        (batch_idx + 1), epoch)
+            # self.writer.add_scalar('PSNR/Val', val_psnr /
+            #                        (batch_idx + 1), epoch)
+            if val_psnr/(batch_idx + 1) > best_psnr:
+                best_psnr = val_psnr/(batch_idx + 1)
+                print('New best_psnr: ', best_psnr)
                 if not os.path.isdir(self.params.save_dir):
                     os.mkdir(self.params.save_dir)
-                torch.save(self.model.state_dict(), 'bestmodel.pth')
+                torch.save(self.model.state_dict(), os.path.join(self.params.save_dir, 'bestmodel.pth'))
 
     def predict(self, test_input) -> torch.Tensor:
         self.model.eval()
