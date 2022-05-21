@@ -14,12 +14,12 @@ except:
     from .others.utils import *
     from .others.unet import *
 
-# logged = True
-# try:
-#     from torch.utils.tensorboard import SummaryWriter
-# except:
-#     # when tensorboard is not installed, don't log.
-#     logged = False
+logged = True
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except:
+    # when tensorboard is not installed, don't log.
+    logged = False
 
 
 class Model():
@@ -27,7 +27,7 @@ class Model():
     def __init__(self) -> None:
         self.params = self._parse()
         torch.manual_seed(self.params.seed)
-        self.use_cuda = torch.cuda.is_available() and self.params.cuda
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if self.params.noise == 'monte':
             self.params.lr = 0.0003  # paper Appendix A.2
             self.model = UNet(in_channels=9)
@@ -54,19 +54,15 @@ class Model():
         else:
             raise NotImplementedError
 
-        if self.use_cuda:
-            self.model = self.model.cuda()
-            self.loss = self.loss.cuda()
+        self.model = self.model.to(self.device)
+        self.loss = self.loss.to(self.device)
 
-        # self.writer = SummaryWriter(comment=self.params.comment)
+        if logged:
+            self.writer = SummaryWriter(comment=self.params.comment)
 
     def load_pretrained_model(self) -> None:
         path2best = os.path.join(self.params.ckpt, 'bestmodel.pth')
-        if self.use_cuda:
-            self.model.load_state_dict(torch.load(path2best))
-        else:
-            self.model.load_state_dict(
-                torch.load(path2best, map_location='cpu'))
+        self.model.load_state_dict(torch.load(path2best, map_location=self.device))
 
     def train(self, train_input, train_target) -> None:
         noisy_imgs, clean_imgs = self.load_raw('val_data.pkl')
@@ -88,18 +84,18 @@ class Model():
                          unit='batch')
             train_loss = 0.0
             for batch_idx, (source, target) in trbar:
-                if self.use_cuda:
-                    source = source.cuda()
-                    target = target.cuda()
+                source = source.to(self.device)
+                target = target.to(self.device)
                 denoise_source = self.model(source)
                 loss = self.loss(denoise_source, target)
                 train_loss += loss.item()
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
-
-            # self.writer.add_scalar('Loss/train', train_loss /
-            #                        (batch_idx + 1), epoch)
+            
+            if logged:
+                self.writer.add_scalar('Loss/train', train_loss /
+                                    (batch_idx + 1), epoch)
 
             val_loss = 0
             val_psnr = 0
@@ -109,9 +105,8 @@ class Model():
                           total=len(val_loader),
                           unit='batch')
             for batch_idx, (source, target) in valbar:
-                if self.use_cuda:
-                    source = source.cuda()
-                    target = target.cuda()
+                source = source.to(self.device)
+                target = target.to(self.device)
                 denoised_source = self.model(source)
                 loss = self.loss(denoise_source, target)
                 val_loss += loss.item()
@@ -120,10 +115,12 @@ class Model():
                     val_psnr_bth += psnr(denoised_source[i], target[i])
                 val_psnr_bth /= self.params.batch_size
                 val_psnr += val_psnr_bth
-            # self.writer.add_scalar('Loss/Val', val_loss /
-            #                        (batch_idx + 1), epoch)
-            # self.writer.add_scalar('PSNR/Val', val_psnr /
-            #                        (batch_idx + 1), epoch)
+
+            if logged:
+                self.writer.add_scalar('Loss/Val', val_loss /
+                                    (batch_idx + 1), epoch)
+                self.writer.add_scalar('PSNR/Val', val_psnr /
+                                    (batch_idx + 1), epoch)
             if val_psnr/(batch_idx + 1) > best_psnr:
                 best_psnr = val_psnr/(batch_idx + 1)
                 print('New best_psnr: ', best_psnr)
@@ -136,8 +133,7 @@ class Model():
         test_input = test_input.float().div(255.0)
         test_input = test_input.unsqueeze(0) if len(
             test_input.size()) == 3 else test_input
-        if self.use_cuda:
-            test_input = test_input.cuda()
+        test_input = test_input.to(self.device)
         denoise_input = self.model(test_input)
         return denoise_input.detach().cpu().squeeze().mul(255.0)
 
@@ -162,7 +158,6 @@ class Model():
                             default='./../data/')
         parser.add_argument('--ckpt', help='checkpoint directory', default='.')
         parser.add_argument('--save-dir', help='save best models', default='.')
-        parser.add_argument('--cuda', help='use cuda', default=True, type=bool)
         parser.add_argument('--seed', help='random seed', default=0, type=int)
 
         parser.add_argument('--beta1',
