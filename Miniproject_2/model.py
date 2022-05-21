@@ -12,6 +12,10 @@ class Module(object):
         raise NotImplementedError
     def param(self):
         return []
+    def to(self, device):
+        return self
+    def load_param(self, *param):
+        return None
     
 class ReLU(Module):
     def __init__(self) -> None:
@@ -33,6 +37,7 @@ class ReLU(Module):
     
     def __call__(self, input):
         return self.forward(input)
+    
     
     
 class sigmoid(Module):
@@ -130,12 +135,25 @@ class Sequential(Module):
         ret = []
         for layer in self.modules:
             ret.append(layer.param()[0])
+            if len(layer.param()) > 1:
+                ret.append(layer.param()[1])
         return ret
     
     def __call__(self, input):
         return self.forward(input)
-            
-        
+    
+    def to(self, device):
+        for i, module in enumerate(self.modules):
+            self.modules[i] = module.to(device)
+        return self
+    
+    def load_param(self, param):
+        model_idx = param_idx = 0
+        while model_idx < len(self.modules) and (param_idx < len(param)):
+            required_length = len(self.modules[model_idx].param())
+            self.modules[model_idx].load_param(param[param_idx:required_length+param_idx])
+            param_idx += required_length
+            model_idx += 1
     
 class Linear(Module):
     def __init__(self, in_dim, out_dim, bias=True) -> None:
@@ -168,6 +186,17 @@ class Linear(Module):
 
     def __call__(self, input):
         return self.forward(input)
+    
+    def to(self, device):
+        self.dl_dw = self.dl_dw.to(device)
+        self.dl_db = self.dl_db.to(device)
+        self.weight = self.weight.to(device)
+        self.bias = self.bias.to(device)
+        return self
+    
+    def load_param(self, param):
+        self.weight, _ = param[0]
+        self.bias, _ = param[1]
     
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, bias=True, dilation=1, stride=1, padding=0):
@@ -227,6 +256,18 @@ class Conv2d(Module):
 
     def __call__(self, input):
         return self.forward(input)
+    
+    def to(self, device):
+        self.dl_dw = self.dl_dw.to(device)
+        self.dl_db = self.dl_db.to(device)
+        self.weight = self.weight.to(device)
+        self.bias = self.bias.to(device)
+        return self
+
+    def load_param(self, param):
+        self.weight, _ = param[0]
+        self.bias, _ = param[1]
+        
 
 class Upsample2d(Module):
     """
@@ -258,7 +299,7 @@ class Upsample2d(Module):
     
     def backward(self, grdwrtoutput):
         dl_dw = self.conv.backward(grdwrtoutput)
-        dl_dx = zeros(dl_dw.size(0), dl_dw.size(1), dl_dw.size(2)//self.scale_factor, dl_dw.size(3)//self.scale_factor)
+        dl_dx = zeros(dl_dw.size(0), dl_dw.size(1), dl_dw.size(2)//self.scale_factor, dl_dw.size(3)//self.scale_factor).to(dl_dw.device)
         for i in range(dl_dw.size(2)):
             for j in range(dl_dw.size(3)):
                 dl_dx[:, :, i//self.scale_factor, j//self.scale_factor] += dl_dw[:, :, i, j]
@@ -270,6 +311,12 @@ class Upsample2d(Module):
     def __call__(self, input):
         return self.forward(input)
 
+    def to(self, device):
+        self.conv = self.conv.to(device)
+        return self   
+    
+    def load_param(self, param):
+        self.conv.load_param(param)
 
 if __name__ == '__main__':
     x = rand(3, 5)
