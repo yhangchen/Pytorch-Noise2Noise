@@ -139,7 +139,7 @@ class Model():
         if self.use_cuda:
             test_input = test_input.cuda()
         denoise_input = self.model(test_input)
-        return denoise_input.detach().squeeze()
+        return denoise_input.detach().cpu().squeeze().mul(255.0)
 
     def load_dataset(self, inputs, targets, sampler=None):
         dataset = torch.utils.data.TensorDataset(inputs.float().div(255.0),
