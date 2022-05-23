@@ -1,11 +1,9 @@
 import os
-from random import sample
 import torch
 import torch.nn as nn
 from torch.optim import Adam
 import numpy as np
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image
 from tqdm import tqdm
 try:
     from others.utils import *
@@ -21,13 +19,15 @@ except:
     # when tensorboard is not installed, don't log.
     logged = False
 
+#to get the file directory
+directory = os.path.dirname(os.path.realpath(__file__))
 
 class Model():
 
     def __init__(self) -> None:
         self.params = self._parse()
         torch.manual_seed(self.params.seed)
-        self.use_cuda = torch.cuda.is_available() and self.params.cuda
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if self.params.noise == 'monte':
             self.params.lr = 0.0003  # paper Appendix A.2
             self.model = UNet(in_channels=9)
@@ -54,25 +54,25 @@ class Model():
         else:
             raise NotImplementedError
 
-        if self.use_cuda:
-            self.model = self.model.cuda()
-            self.loss = self.loss.cuda()
+        self.model = self.model.to(self.device)
+        self.loss = self.loss.to(self.device)
+        self.best_psnr = -np.inf
 
-        self.writer = SummaryWriter(comment=self.params.comment) if logged else None
+        if logged:
+            self.writer = SummaryWriter(comment=self.params.comment)
 
     def load_pretrained_model(self) -> None:
         path2best = os.path.join(self.params.ckpt, 'bestmodel.pth')
-        if self.use_cuda:
-            self.model.load_state_dict(torch.load(path2best))
-        else:
-            self.model.load_state_dict(
-                torch.load(path2best, map_location='cpu'))
+        state = torch.load(path2best, map_location=self.device)
+        self.model.load_state_dict(state['state_dict'])
+        self.best_psnr = state['psnr']
 
-    def train(self, train_input, train_target) -> None:
+    def train(self, train_input, train_target, num_epochs=None) -> None:
         noisy_imgs, clean_imgs = self.load_raw('val_data.pkl')
         val_loader = self.load_dataset(noisy_imgs, clean_imgs)
-        best_psnr = -np.inf
-        for epoch in range(self.params.epoch):
+        if num_epochs is None:
+            num_epochs = self.params.epoch
+        for epoch in range(num_epochs):
             print(f'Epoch: {epoch}')
             self.model.train()
             train_sampler = torch.utils.data.SubsetRandomSampler(
@@ -88,18 +88,18 @@ class Model():
                          unit='batch')
             train_loss = 0.0
             for batch_idx, (source, target) in trbar:
-                if self.use_cuda:
-                    source = source.cuda()
-                    target = target.cuda()
+                source = source.to(self.device)
+                target = target.to(self.device)
                 denoise_source = self.model(source)
                 loss = self.loss(denoise_source, target)
                 train_loss += loss.item()
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
-
-            self.writer.add_scalar('Loss/train', train_loss /
-                                   (batch_idx + 1), epoch) if logged else None
+            
+            if logged:
+                self.writer.add_scalar('Loss/train', train_loss /
+                                    (batch_idx + 1), epoch)
 
             val_loss = 0
             val_psnr = 0
@@ -109,9 +109,8 @@ class Model():
                           total=len(val_loader),
                           unit='batch')
             for batch_idx, (source, target) in valbar:
-                if self.use_cuda:
-                    source = source.cuda()
-                    target = target.cuda()
+                source = source.to(self.device)
+                target = target.to(self.device)
                 denoised_source = self.model(source)
                 loss = self.loss(denoise_source, target)
                 val_loss += loss.item()
@@ -120,26 +119,32 @@ class Model():
                     val_psnr_bth += psnr(denoised_source[i], target[i])
                 val_psnr_bth /= self.params.batch_size
                 val_psnr += val_psnr_bth
-            self.writer.add_scalar('Loss/Val', val_loss /
-                                   (batch_idx + 1), epoch) if logged else None
-            self.writer.add_scalar('PSNR/Val', val_psnr /
-                                   (batch_idx + 1), epoch) if logged else None
-            if val_psnr > best_psnr:
-                best_psnr = val_psnr
-                print('New best_psnr: ', best_psnr/(batch_idx + 1))
+
+            if logged:
+                self.writer.add_scalar('Loss/Val', val_loss /
+                                    (batch_idx + 1), epoch)
+                self.writer.add_scalar('PSNR/Val', val_psnr /
+                                    (batch_idx + 1), epoch)
+            if val_psnr/(batch_idx + 1) > self.best_psnr:
+                self.best_psnr = val_psnr.item()/(batch_idx + 1)
+                print('New best_psnr: ', self.best_psnr)
                 if not os.path.isdir(self.params.save_dir):
                     os.mkdir(self.params.save_dir)
-                torch.save(self.model.state_dict(), 'bestmodel.pth')
+                state = {
+                    'state_dict': self.model.state_dict(),
+                    'psnr': self.best_psnr
+                }
+                torch.save(state, os.path.join(self.params.save_dir, 'bestmodel.pth'))
 
     def predict(self, test_input) -> torch.Tensor:
+        self.load_pretrained_model()
         self.model.eval()
         test_input = test_input.float().div(255.0)
         test_input = test_input.unsqueeze(0) if len(
             test_input.size()) == 3 else test_input
-        if self.use_cuda:
-            test_input = test_input.cuda()
+        test_input = test_input.to(self.device)
         denoise_input = self.model(test_input)
-        return denoise_input.detach().cpu().squeeze().mul(255.0)
+        return denoise_input.detach().cpu().mul(255.0).clip(0, 255)
 
     def load_dataset(self, inputs, targets, sampler=None):
         dataset = torch.utils.data.TensorDataset(inputs.float().div(255.0),
@@ -151,18 +156,16 @@ class Model():
                           drop_last=True)
 
     def load_raw(self, name):
-        return torch.load(os.path.join(self.params.data_dir, name))
+        return torch.load(os.path.join(self.params.data_path, name))
 
     def _parse(self):
         from argparse import ArgumentParser
         parser = ArgumentParser(
             description='PyTorch implementation of Noise2Noise')
-        parser.add_argument('--data-dir',
-                            help='data directory',
-                            default='./../data/')
-        parser.add_argument('--ckpt', help='checkpoint directory', default='.')
-        parser.add_argument('--save-dir', help='save best models', default='.')
-        parser.add_argument('--cuda', help='use cuda', default=True, type=bool)
+        parser.add_argument('-p', '--project-path', help='Path to the project folder') # to fit the test.py
+        parser.add_argument('-d', '--data-path', help='Path to the data folder', default=os.path.join(directory, './../data/'))
+        parser.add_argument('--ckpt', help='checkpoint directory', default=directory)
+        parser.add_argument('--save-dir', help='save best models', default=directory)
         parser.add_argument('--seed', help='random seed', default=0, type=int)
 
         parser.add_argument('--beta1',
