@@ -8,3 +8,8 @@ __pycache__
 *.png
 .vscode/*
 log/*
+*.run
+*.sh
+*.out
+Miniproject_2/*.ipynb
+*.pickle
