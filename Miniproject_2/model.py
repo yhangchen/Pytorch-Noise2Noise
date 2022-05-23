@@ -334,15 +334,36 @@ class Model():
         self.device = device('cuda' if cuda.is_available() else 'cpu')
         
         self.model = Sequential(
-            Conv2d(3, 32, 5, stride=2),
+            Conv2d(3, 64, 3, stride=2),
             ReLU(), 
-            Conv2d(32, 32, 1, stride=2, padding=0),
+            Conv2d(64, 64, 3, stride=2, padding=0),
             ReLU(), 
-            Upsample2d(4, 32, 32, stride=2, kernel_size=5, padding=0),
+            Upsample2d(18, 64, 64, stride=2, kernel_size=3, padding=3),
             ReLU(), 
-            Upsample2d(3, 32, 3, stride=1, kernel_size=5, padding=0),
+            Upsample2d(1, 64, 3, stride=2, kernel_size=3, padding=0),
             sigmoid()
         ).to(self.device)
+        # self.model = Sequential(
+        #     Conv2d(3, 64, 2, stride=2),
+        #     ReLU(), 
+        #     Conv2d(64, 64, 2, stride=2, padding=1),
+        #     ReLU(), 
+        #     Upsample2d(2, 64, 64, stride=1, kernel_size=3, padding=0),
+        #     ReLU(), 
+        #     Upsample2d(2, 64, 3, stride=1, kernel_size=1, padding=0),
+        #     sigmoid()
+        # ).to(self.device)
+        
+        # self.model = Sequential(
+        #     Conv2d(3, 32, 5, stride=2),
+        #     ReLU(), 
+        #     Conv2d(32, 32, 1, stride=2, padding=0),
+        #     ReLU(), 
+        #     Upsample2d(4, 32, 32, stride=2, kernel_size=5, padding=0),
+        #     ReLU(), 
+        #     Upsample2d(3, 32, 3, stride=1, kernel_size=5, padding=0),
+        #     sigmoid()
+        # ).to(self.device)
         # Good case with small stride
         # self.model = Sequential(
         #     Conv2d(3, 32, 3, stride=1),
@@ -493,7 +514,7 @@ class Model():
                 
             if val_psnr > best_psnr:
                 best_psnr = val_psnr
-                print('New best_psnr: ', best_psnr/(batch_idx + 1))
+                print('New best_psnr: ', best_psnr)
                 print('Saving model....')
                 self.save_model('bestmodel.pth')
                 
@@ -515,7 +536,7 @@ class Model():
 
 if __name__ == '__main__':
     for bz in [16]:
-        for lr_test in [5e-5]:
+        for lr_test in [10e-5]:
             model = Model(lr=lr_test, batch_size=bz)
             train_input, train_target = model.load_raw('train_data.pkl')
-            model.train(train_input, train_target, load_model=False, num_epoch=300)
+            model.train(train_input, train_target, load_model=False, num_epoch=100)
