@@ -1,4 +1,4 @@
-from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange
+from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange, inf
 import math
 from torch.nn.functional import unfold, fold
 import os
@@ -312,15 +312,14 @@ class Upsample2d(Module):
     def backward(self, grdwrtoutput):
         dl_dw = self.conv.backward(grdwrtoutput)
         N, C, H, W = dl_dw.size()
-        out_h = H // self.scale_factor
-        out_w = W // self.scale_factor
+        out_h, out_w = H // self.scale_factor, W // self.scale_factor
         rows = arange(0, H, self.scale_factor).repeat(out_h)
         cols = arange(0, W, self.scale_factor).repeat_interleave(out_w)
-        x0y0 = dl_dw[..., cols+0, rows+0]
-        x0y1 = dl_dw[..., cols+0, rows+1]
-        x1y0 = dl_dw[..., cols+1, rows+0]
-        x1y1 = dl_dw[..., cols+1, rows+1]
-        dl_dx = (x0y0 + x0y1 + x1y0 + x1y1).reshape(N, C, out_h, out_w)
+        dl_dx = zeros(dl_dw[..., cols+0, rows+0].size()).to(grdwrtoutput.device)
+        for i in range(self.scale_factor):
+            for j in range(self.scale_factor):
+                dl_dx = dl_dx + dl_dw[..., cols+i, rows+j]
+        dl_dx = dl_dx.reshape(N, C, out_h, out_w)
         return dl_dx
     
     def param(self):
@@ -372,27 +371,6 @@ class Model():
             Sigmoid()
         ).to(self.device) 
         
-        # self.model = Sequential(
-        #     Conv2d(3, 32, 3, stride=2),
-        #     ReLU(), 
-        #     Conv2d(32, 64, 3, stride=2, dilation=2),
-        #     ReLU(), 
-        #     Upsample2d(3, 64, 32, stride=1, kernel_size=3, padding=0),
-        #     ReLU(), 
-        #     Upsample2d(2, 32, 3, stride=1, kernel_size=3, padding=1),
-        #     Sigmoid()
-        # ).to(self.device) 
-        # self.model = Sequential(
-        #     Conv2d(3, 32, 3, stride=2),
-        #     ReLU(), 
-        #     Conv2d(32, 64, 3, stride=2, dilation=2),
-        #     ReLU(), 
-        #     Upsample2d(3, 64, 32, stride=1, kernel_size=3, padding=0),
-        #     ReLU(), 
-        #     Upsample2d(2, 32, 3, stride=1, kernel_size=1, padding=0),
-        #     Sigmoid()
-        # ).to(self.device) 
-        
         self.optimizer = SGD(self.model.param(), lr)
         self.criterion = MSELoss()
 
@@ -414,7 +392,7 @@ class Model():
         
         noisy_imgs, clean_imgs = self.load_raw('val_data.pkl')
         val_loader = self.load_dataset(noisy_imgs, clean_imgs)
-        best_psnr = -np.inf
+        best_psnr = -inf
         for epoch in range(num_epochs):
             print(f'Epoch: {epoch}')
             train_sampler = SubsetRandomSampler(
@@ -441,7 +419,7 @@ class Model():
                 self.optimizer.zero_grad()
                 self.model.backward(dloss)
                 self.optimizer.step()
-            print(train_loss)
+            print("Training loss: ", train_loss)
 
             self.writer.add_scalar('Loss/train', train_loss /
                                    (batch_idx + 1), epoch) if logged else None
@@ -476,7 +454,7 @@ class Model():
                 
             if val_psnr > best_psnr:
                 best_psnr = val_psnr
-                print('New best_psnr: ', best_psnr)
+                print('New best_psnr: ', best_psnr.item())
                 print('Saving model....')
                 self.save_model(self.default_model_dir)
                 
@@ -502,7 +480,7 @@ class Model():
 
 if __name__ == '__main__':
     for bz in [16]:
-        for lr_test in [10e-5]:
+        for lr_test in [2e-6]:
             model = Model(lr=lr_test, batch_size=bz)
             train_input, train_target = model.load_raw('train_data.pkl')
-            model.train(train_input, train_target, load_model=False, num_epochs=100)
+            model.train(train_input, train_target, load_model=True, num_epochs=100)
