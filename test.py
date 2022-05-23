@@ -82,8 +82,8 @@ class Tests(unittest.TestCase):
     def _test_forward_dummy_input(self, project_number):
         Model = importlib.import_module(f"Miniproject_{project_number}.model").Model
         model = Model()
-        out = model.predict(torch.rand(1, 3, 512, 512) * 255)
-        self.assertEqual(out.shape, (1, 3, 512, 512))
+        out = model.predict(torch.rand(1, 3, 32, 32) * 255)
+        self.assertEqual(out.shape, (1, 3, 32, 32))
         self.assertGreaterEqual(out.min(), 0)
         self.assertLessEqual(out.max(), 255)
 
