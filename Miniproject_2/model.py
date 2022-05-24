@@ -337,45 +337,47 @@ class Upsample2d(Module):
 
 class Model():
     
-    def __init__(self, batch_size=4, lr=0.0001, model_dir=None) -> None:
+    def __init__(self, batch_size=4, lr=0.0001, model_dir=None, use_model=1) -> None:
         
         self.batch_size = batch_size
         
-        cur_directory = os.path.dirname(os.path.realpath(__file__))
+        self.cur_directory = os.path.dirname(os.path.realpath(__file__))
         
-        self.default_model_dir = os.path.join(cur_directory, 'bestmodel.pth') if model_dir is None else model_dir
+        self.default_model_dir = os.path.join(self.cur_directory, 'bestmodel.pth') if model_dir is None else model_dir
         
         self.device = device('cuda' if cuda.is_available() else 'cpu') # for training and finding model structure we use 'cuda'
         
         
         ## Best model structure
-        # self.model = Sequential(
-        #     Conv2d(3, 32, 3, stride=1),
-        #     ReLU(), 
-        #     Conv2d(32, 64, 3, stride=1, padding=3),
-        #     ReLU(), 
-        #     Upsample2d(2, 64, 32, stride=2),
-        #     ReLU(), 
-        #     Upsample2d(2, 32, 3, stride=2),
-        #     Sigmoid()
-        # ).to(self.device)
-        
-        self.model = Sequential(
-            Conv2d(3, 10, 3, stride=2),
-            ReLU(), 
-            Conv2d(10, 10, 3, stride=2),
-            ReLU(), 
-            Upsample2d(3, 10, 10, stride=1, kernel_size=3, padding=0),
-            ReLU(), 
-            Upsample2d(5, 10, 3, stride=3, kernel_size=3, padding=1),
-            Sigmoid()
-        ).to(self.device) 
+        if use_model == 1:
+            self.model = Sequential(
+                Conv2d(3, 32, 3, stride=1),
+                ReLU(), 
+                Conv2d(32, 64, 3, stride=1, padding=3),
+                ReLU(), 
+                Upsample2d(2, 64, 32, stride=2),
+                ReLU(), 
+                Upsample2d(2, 32, 3, stride=2),
+                Sigmoid()
+            ).to(self.device)
+        else:
+            self.model = Sequential(
+                Conv2d(3, 32, 3, stride=2),
+                ReLU(), 
+                Conv2d(32, 32, 3, stride=2),
+                ReLU(), 
+                Upsample2d(3, 32, 32, stride=1, kernel_size=3, padding=0),
+                ReLU(), 
+                Upsample2d(5, 32, 3, stride=3, kernel_size=3, padding=1),
+                Sigmoid()
+            ).to(self.device) 
         
         self.optimizer = SGD(self.model.param(), lr)
         self.criterion = MSELoss()
 
-        self.writer = SummaryWriter(comment='lr_{}_bz_{}'.format(lr, self.batch_size)) if logged else None
-
+        if logged:
+            self.writer = SummaryWriter(comment='lr_{}_bz_{}'.format(lr, self.batch_size)) 
+        
     def load_pretrained_model(self):
         params = pickle.load(open(self.default_model_dir, 'rb'))
         self.model.load_param(params)
@@ -421,9 +423,9 @@ class Model():
                 self.optimizer.step()
             print("Training loss: ", train_loss)
 
-            self.writer.add_scalar('Loss/train', train_loss /
-                                   (batch_idx + 1), epoch) if logged else None
-
+            if logged:
+                self.writer.add_scalar('Loss/train', train_loss / (batch_idx + 1), epoch)
+                
             val_loss = 0
             val_psnr = 0
             valbar = tqdm(enumerate(val_loader),
@@ -449,7 +451,7 @@ class Model():
             # Mean PSNR of this batch
             val_psnr = val_psnr / (batch_idx + 1)            
             if logged:
-                self.writer.add_scalar('Loss/Val', val_psnr, epoch)
+                self.writer.add_scalar('Loss/Val', val_loss/ (batch_idx + 1), epoch)
                 self.writer.add_scalar('PSNR/Val', val_psnr, epoch) 
                 
             if val_psnr > best_psnr:
@@ -467,7 +469,7 @@ class Model():
         return denoise_source.mul(255.0)
 
     def load_raw(self, name):
-        return load(os.path.join('./../data/', name))
+        return load(os.path.join(self.cur_directory, '../data/', name))
 
     def load_dataset(self, inputs, targets, sampler=None):
         dataset = TensorDataset(inputs.float().div(255.0),
@@ -479,8 +481,9 @@ class Model():
                           drop_last=True)
 
 if __name__ == '__main__':
+    lr_test = 1e-4
     for bz in [16]:
-        for lr_test in [2e-6]:
-            model = Model(lr=lr_test, batch_size=bz)
+        for model_num in [1, 2]:
+            model = Model(lr=lr_test, batch_size=bz, use_model=model_num)
             train_input, train_target = model.load_raw('train_data.pkl')
-            model.train(train_input, train_target, load_model=True, num_epochs=100)
+            model.train(train_input, train_target, load_model=False, num_epochs=500)
