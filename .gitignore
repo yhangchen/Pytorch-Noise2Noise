@@ -3,7 +3,7 @@ ckpt
 runs
 __pycache__
 *.sh
-*.pth
+
 *.jpg
 *.png
 .vscode/*

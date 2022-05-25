@@ -1,4 +1,12 @@
-from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange, inf
+'''
+Author: Chengkun Li
+LastEditors: Chengkun Li
+Date: 2022-5-17 09:23:08
+LastEditTime: 2022-05-25 12:46:41
+Description: Miniproject 2 implementation
+FilePath: /Pytorch-Noise2NOise/Miniproject_2/model.py
+'''
+from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange
 import math
 from torch.nn.functional import unfold, fold
 import os
@@ -81,7 +89,7 @@ class SGD():
     1. zero_grad():
         set the gradients in all the modules to 0
     2. step():
-        update the param in all modules by w += grad * lr
+        update the param in all modules by w += -grad * lr
     Usage:
     optim = SGD(model.parameters(), lr=0.1, *)
     
@@ -116,7 +124,7 @@ class MSELoss(Module):
         return loss
 
     def backward(self):
-        dloss = 2 * (self.pred - self.gt)/self.pred.size(0)
+        dloss = 2 * (self.pred - self.gt)/self.pred.numel()
         return dloss
     
     def param(self):
@@ -255,7 +263,7 @@ class Conv2d(Module):
     def backward(self, grdwrtoutput):
         grdwrtoutput = grdwrtoutput.flatten(2, -1)
         weight = self.weight.reshape(self.out_channels, -1)
-        # here x is cin*kernelwidth^2 and s is Hout*Wout
+        # here x is cin*kernelsize^2 and s is Hout*Wout
         dl_dx = einsum('ox,nos->nxs', weight, grdwrtoutput)
         out_size = (self.x.size(-2), self.x.size(-1))
         dl_dx = fold(dl_dx, output_size=out_size, kernel_size=self.kernel_size, dilation=self.dilation, padding=self.padding, stride=self.stride)
@@ -281,7 +289,7 @@ class Conv2d(Module):
         self.weight, _ = param[0]
         self.bias, _ = param[1]
         
-class Upsample2d(Module):
+class Upsampling(Module):
     """
     Upsample of 2-d images, here we assume the input is [N, Cin, Hin, Win]
     """
@@ -337,13 +345,14 @@ class Upsample2d(Module):
 
 class Model():
     
-    def __init__(self, batch_size=4, lr=0.0001, model_dir=None, use_model=1) -> None:
+    def __init__(self, batch_size=4, lr=0.0001, model_dir=None, use_model=2) -> None:
         
         self.batch_size = batch_size
         
         self.cur_directory = os.path.dirname(os.path.realpath(__file__))
         
-        self.default_model_dir = os.path.join(self.cur_directory, 'bestmodel.pth') if model_dir is None else model_dir
+        model_name = '1' if use_model == 1 else ''
+        self.default_model_dir = os.path.join(self.cur_directory, 'bestmodel{}.pth'.format(model_name)) if model_dir is None else model_dir
         
         self.device = device('cuda' if cuda.is_available() else 'cpu') # for training and finding model structure we use 'cuda'
         
@@ -355,22 +364,22 @@ class Model():
                 ReLU(), 
                 Conv2d(32, 64, 3, stride=1, padding=3),
                 ReLU(), 
-                Upsample2d(2, 64, 32, stride=2),
+                Upsampling(2, 64, 32, stride=2),
                 ReLU(), 
-                Upsample2d(2, 32, 3, stride=2),
+                Upsampling(2, 32, 3, stride=2),
                 Sigmoid()
             ).to(self.device)
         else:
             self.model = Sequential(
-                Conv2d(3, 32, 3, stride=2),
-                ReLU(), 
-                Conv2d(32, 32, 3, stride=2),
-                ReLU(), 
-                Upsample2d(3, 32, 32, stride=1, kernel_size=3, padding=0),
-                ReLU(), 
-                Upsample2d(5, 32, 3, stride=3, kernel_size=3, padding=1),
-                Sigmoid()
-            ).to(self.device) 
+            Conv2d(3, 10, 3, stride=2, padding=2),
+            ReLU(),
+            Conv2d(10, 10, 3, stride=2, padding=2),
+            ReLU(),
+            Upsampling(2, 10, 10, kernel_size=4, stride=1),
+            ReLU(),
+            Upsampling(2, 10, 3, stride=1, kernel_size=3),
+            Sigmoid()
+        ).to(self.device) 
         
         self.optimizer = SGD(self.model.param(), lr)
         self.criterion = MSELoss()
@@ -379,13 +388,16 @@ class Model():
             self.writer = SummaryWriter(comment='lr_{}_bz_{}'.format(lr, self.batch_size)) 
         
     def load_pretrained_model(self):
+        print('Loading trained model from', self.default_model_dir)
         params = pickle.load(open(self.default_model_dir, 'rb'))
         self.model.load_param(params)
+        print('Model loaded.')
         return True
         
 
     def save_model(self, dir):
         pickle.dump(self.model.param(),open(dir, 'wb'))
+        print('Model saved at: ', dir)
             
     
     def train(self, train_input, train_target, num_epochs=50, load_model=False):
@@ -394,7 +406,7 @@ class Model():
         
         noisy_imgs, clean_imgs = self.load_raw('val_data.pkl')
         val_loader = self.load_dataset(noisy_imgs, clean_imgs)
-        best_psnr = -inf
+        best_psnr = -math.inf
         for epoch in range(num_epochs):
             print(f'Epoch: {epoch}')
             train_sampler = SubsetRandomSampler(
@@ -431,14 +443,19 @@ class Model():
             valbar = tqdm(enumerate(val_loader),
                           total=len(val_loader),
                           unit='batch')
+            source_imgs = []
+            targets_imgs = []
+            denoised_imgs = []
             for batch_idx, (source, target) in valbar:
                 source, target = source.to(self.device), target.to(self.device)
                 denoised_source = self.model(source)
                 
-                if logged:
-                    self.writer.add_images('Source/Val', source, epoch) 
-                    self.writer.add_images('Target/Val', target, epoch)
-                    self.writer.add_images('Denoised/Val', denoised_source, epoch) 
+                # output first 5 batches
+                if logged and batch_idx < 5:
+                    source_imgs.append(source.cpu().detach().numpy())
+                    targets_imgs.append(target.cpu().detach().numpy())
+                    denoised_imgs.append(denoised_source.cpu().detach().numpy())
+
                 
                 loss = self.criterion(denoise_source, target)
                 val_loss += loss.item()
@@ -453,6 +470,9 @@ class Model():
             if logged:
                 self.writer.add_scalar('Loss/Val', val_loss/ (batch_idx + 1), epoch)
                 self.writer.add_scalar('PSNR/Val', val_psnr, epoch) 
+                self.writer.add_images('Source/Val', np.vstack(source_imgs), epoch) 
+                self.writer.add_images('Target/Val', np.vstack(targets_imgs), epoch)
+                self.writer.add_images('Denoised/Val', np.vstack(denoised_imgs), epoch) 
                 
             if val_psnr > best_psnr:
                 best_psnr = val_psnr
@@ -481,9 +501,13 @@ class Model():
                           drop_last=True)
 
 if __name__ == '__main__':
-    lr_test = 1e-4
+    lr_test = 6e-2
     for bz in [16]:
-        for model_num in [1, 2]:
+        """
+        model 1 is stride 1; model 2 is stride (the required one)
+        if you want to use pretrained model, please modify `load_model` to True
+        """
+        for model_num in [2]: 
             model = Model(lr=lr_test, batch_size=bz, use_model=model_num)
             train_input, train_target = model.load_raw('train_data.pkl')
-            model.train(train_input, train_target, load_model=False, num_epochs=500)
+            model.train(train_input, train_target, load_model=False, num_epochs=100)
