@@ -112,7 +112,7 @@ class Model():
                 source = source.to(self.device)
                 target = target.to(self.device)
                 denoised_source = self.model(source)
-                loss = self.loss(denoise_source, target)
+                loss = self.loss(denoised_source, target)
                 val_loss += loss.item()
                 val_psnr_bth = 0
                 for i in range(self.params.batch_size):
