@@ -400,7 +400,7 @@ class Model():
         print('Model saved at: ', dir)
             
     
-    def train(self, train_input, train_target, num_epochs=50, load_model=False):
+    def train(self, train_input, train_target, num_epochs=50, load_model=False, save_model=False):
         if load_model:
             self.load_pretrained_model()
         
@@ -457,7 +457,7 @@ class Model():
                     denoised_imgs.append(denoised_source.cpu().detach().numpy())
 
                 
-                loss = self.criterion(denoise_source, target)
+                loss = self.criterion(denoised_source, target)
                 val_loss += loss.item()
                 val_psnr_bth = 0
                 for i in range(self.batch_size):
@@ -477,9 +477,32 @@ class Model():
             if val_psnr > best_psnr:
                 best_psnr = val_psnr
                 print('New best_psnr: ', best_psnr.item())
-                print('Saving model....')
-                self.save_model(self.default_model_dir)
-                
+                if save_model:
+                    print('Saving model....')
+                    self.save_model(self.default_model_dir)
+        
+        
+        print('Training done! Now testing the best model...')
+        
+        self.load_pretrained_model()
+        val_loss = 0
+        val_psnr = 0
+        valbar = tqdm(enumerate(val_loader),
+                        total=len(val_loader),
+                        unit='batch')
+        for batch_idx, (source, target) in valbar:
+            source, target = source.to(self.device), target.to(self.device)
+            denoised_source = self.model(source)
+            loss = self.criterion(denoised_source, target)
+            val_loss += loss.item()
+            val_psnr_bth = 0
+            for i in range(self.batch_size):
+                val_psnr_bth += psnr(denoised_source[i], target[i])
+            val_psnr_bth /= self.batch_size
+            val_psnr += val_psnr_bth
+        
+        val_psnr = val_psnr / (batch_idx + 1)            
+        print('best_psnr: ', val_psnr.item())      
     def predict(self, test_input):
         test_input = test_input.float().div(255.0)
         test_input = test_input.unsqueeze(0) if len(
@@ -502,12 +525,20 @@ class Model():
 
 if __name__ == '__main__':
     lr_test = 6e-2
-    for bz in [16]:
-        """
-        model 1 is stride 1; model 2 is stride (the required one)
-        if you want to use pretrained model, please modify `load_model` to True
-        """
-        for model_num in [2]: 
-            model = Model(lr=lr_test, batch_size=bz, use_model=model_num)
-            train_input, train_target = model.load_raw('train_data.pkl')
-            model.train(train_input, train_target, load_model=False, num_epochs=100)
+    # if train then set valid to False
+    valid = False
+    if not valid:
+        for bz in [16]:
+            """
+            model 1 is stride 1; model 2 is stride (the required one)
+            if you want to use pretrained model, please modify `load_model` to True
+            """
+            for model_num in [1]: 
+                model = Model(lr=lr_test, batch_size=bz, use_model=model_num)
+                train_input, train_target = model.load_raw('train_data.pkl')
+                model.train(train_input, train_target, load_model=False, num_epochs=500, save_model=True)
+    else:
+        print('Validating the model...')
+        model = Model(lr=lr_test, batch_size=16, use_model=1)
+        train_input, train_target = model.load_raw('train_data.pkl')
+        model.train(train_input, train_target, load_model=True, num_epochs=0, save_model=False)
