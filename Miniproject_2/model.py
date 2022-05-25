@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2022-5-17 09:23:08
-LastEditTime: 2022-05-25 17:51:18
+LastEditTime: 2022-05-25 19:43:48
 Description: Miniproject 2 implementation
 FilePath: /Pytorch-Noise2Noise/Miniproject_2/model.py
 '''
@@ -360,11 +360,12 @@ class Model():
         model_name = '1' if use_model == 1 else ''
         self.default_model_dir = os.path.join(self.cur_directory, 'bestmodel{}.pth'.format(model_name)) if model_dir is None else model_dir
         
-        self.device = device('cuda' if cuda.is_available() else 'cpu') # for training and finding model structure we use 'cuda'
+        # For larger models cuda accelerates significantly
+        self.device = device('cuda' if cuda.is_available() else 'cpu') 
         
         print('Using device: ', self.device)
         
-        ## Best model structure
+        # Model 1 in our report
         if use_model == 1:
             self.model = Sequential(
                 Conv2d(3, 32, 3, stride=1),
@@ -377,6 +378,7 @@ class Model():
                 Sigmoid()
             ).to(self.device)
         else:
+            # Model 2 in our report
             self.model = Sequential(
             Conv2d(3, 10, 3, stride=2, padding=2),
             ReLU(),
@@ -430,7 +432,7 @@ class Model():
             print(f'Epoch: {epoch}')
             train_sampler = SubsetRandomSampler(
                 np.random.choice(len(train_input),
-                                 500 *
+                                 500 * # 500 is steps per epoch
                                  self.batch_size,
                                  replace=False))
             
@@ -550,7 +552,7 @@ if __name__ == '__main__':
     if not valid:
         for bz in [16]:
             """
-            model 1 is stride 1; model 2 is stride (the required one)
+            model 1 is stride 1; model 2 is stride 2 (the required one)
             if you want to use pretrained model, please modify `load_model` to True
             """
             for model_num in [1]: 
