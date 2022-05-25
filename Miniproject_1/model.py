@@ -4,7 +4,11 @@ import torch.nn as nn
 from torch.optim import Adam
 import numpy as np
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+# Import tqdm if installed
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda x: x
 try:
     from others.utils import *
     from others.unet import *

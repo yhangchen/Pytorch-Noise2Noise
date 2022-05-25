@@ -12,7 +12,11 @@ from torch.nn.functional import unfold, fold
 import os
 from torch.utils.data import TensorDataset, DataLoader, SubsetRandomSampler
 import numpy as np
-from tqdm import tqdm
+# Import tqdm if installed
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda x: x
 try:
     from others.utils import psnr
 except:
