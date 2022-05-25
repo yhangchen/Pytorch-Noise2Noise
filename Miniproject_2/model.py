@@ -401,8 +401,17 @@ class Model():
         
 
     def save_model(self, dir):
+        # save all the parameters to cpu first before saving
+        params = self.model.param()
+        for i, tup in enumerate(params):
+            tup2list = list(tup)
+            for j, v in enumerate(tup2list):
+                if v is not None:
+                    tup2list[j] = v.to('cpu')
+            params[i] = tuple(tup2list)
+            
         with open(dir, 'wb') as f:
-            pickle.dump(self.model.param(), f)
+            pickle.dump(params, f)
         
         print('Model saved at: ', dir)
             
