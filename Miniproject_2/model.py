@@ -2,9 +2,9 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2022-5-17 09:23:08
-LastEditTime: 2022-05-25 16:38:07
+LastEditTime: 2022-05-25 17:51:18
 Description: Miniproject 2 implementation
-FilePath: /Miniproject_2/model.py
+FilePath: /Pytorch-Noise2Noise/Miniproject_2/model.py
 '''
 from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange
 import math
@@ -38,7 +38,7 @@ class Module(object):
         return []
     def to(self, device):
         return self
-    def load_param(self, *param):
+    def load_param(self, *param, device):
         return None
     
 class ReLU(Module):
@@ -167,11 +167,11 @@ class Sequential(Module):
             self.modules[i] = module.to(device)
         return self
     
-    def load_param(self, param):
+    def load_param(self, param, device):
         model_idx = param_idx = 0
         while model_idx < len(self.modules) and (param_idx < len(param)):
             required_length = len(self.modules[model_idx].param())
-            self.modules[model_idx].load_param(param[param_idx:required_length+param_idx])
+            self.modules[model_idx].load_param(param[param_idx:required_length+param_idx], device=device)
             param_idx += required_length
             model_idx += 1
     
@@ -215,9 +215,10 @@ class Linear(Module):
         self.bias = self.bias.to(device)
         return self
     
-    def load_param(self, param):
+    def load_param(self, param, device):
         self.weight, _ = param[0]
         self.bias, _ = param[1]
+        self = self.to(device)
     
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, bias=True, dilation=1, stride=1, padding=0):
@@ -285,9 +286,10 @@ class Conv2d(Module):
         self.bias = self.bias.to(device)
         return self
 
-    def load_param(self, param):
+    def load_param(self, param, device):
         self.weight, _ = param[0]
         self.bias, _ = param[1]
+        self = self.to(device)
         
 class Upsampling(Module):
     """
@@ -340,8 +342,8 @@ class Upsampling(Module):
         self.conv = self.conv.to(device)
         return self   
     
-    def load_param(self, param):
-        self.conv.load_param(param)
+    def load_param(self, param, device):
+        self.conv.load_param(param, device)
 
 class Model():
     
@@ -356,6 +358,7 @@ class Model():
         
         self.device = device('cuda' if cuda.is_available() else 'cpu') # for training and finding model structure we use 'cuda'
         
+        print('Using device: ', self.device)
         
         ## Best model structure
         if use_model == 1:
@@ -392,7 +395,7 @@ class Model():
         with open(self.default_model_dir, 'rb') as f:
             params = pickle.load(f)
         
-        self.model.load_param(params)
+        self.model.load_param(params, self.device)
         print('Model loaded.')
         return True
         
