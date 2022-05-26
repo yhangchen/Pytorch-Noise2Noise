@@ -1,6 +1,6 @@
-import sys,os
+import sys
 sys.path.append('../')
-from model import Linear, Sequential, ReLU, SGD, MSELoss, Conv2d, Upsample2d
+from model import Linear, Sequential, ReLU, SGD, MSELoss, Conv2d, Upsampling
 from torch import rand, ones
 import math
 from torch.nn.functional import unfold, fold
@@ -17,7 +17,7 @@ if __name__ == '__main__':
     Linear(10, 1),   
     )
     
-    optimizer = SGD(seq_model.param(), 0.05)
+    optimizer = SGD(seq_model.param(), 0.01)
     criterion = MSELoss()    
     loss = math.inf
     
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     x = rand(10, 3, 32, 32)
     y = ones(10, 5, 30, 30)*0.5
 
-    optimizer = SGD(model.param(), 0.00001)
+    optimizer = SGD(model.param(), 0.01)
     criterion = MSELoss()
 
     loss = 9999
@@ -63,8 +63,8 @@ if __name__ == '__main__':
     # Upsample test
     x = rand(1, 3, 2, 2)
     y = ones(1, 5, 6, 6)*1
-    model = Upsample2d(4, 3, 5)
-    optimizer = SGD(model.param(), 0.0001)
+    model = Upsampling(4, 3, 5)
+    optimizer = SGD(model.param(), 0.01)
     criterion = MSELoss()
 
     loss = 9999
