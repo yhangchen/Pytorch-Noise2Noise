@@ -380,13 +380,13 @@ class Model():
         else:
             # Model 2 in our report
             self.model = Sequential(
-            Conv2d(3, 10, 3, stride=2, padding=2),
+            Conv2d(3, 32, 3, stride=2, padding=2),
             ReLU(),
-            Conv2d(10, 10, 3, stride=2, padding=2),
+            Conv2d(32, 64, 3, stride=2, padding=2),
             ReLU(),
-            Upsampling(2, 10, 10, kernel_size=4, stride=1),
+            Upsampling(2, 64, 32, kernel_size=4, stride=1),
             ReLU(),
-            Upsampling(2, 10, 3, stride=1, kernel_size=3),
+            Upsampling(2, 32, 3, stride=1, kernel_size=3),
             Sigmoid()
         ).to(self.device) 
         
@@ -546,7 +546,7 @@ class Model():
                           drop_last=True)
 
 if __name__ == '__main__':
-    lr_test = 6e-2
+    lr_test = 8e-2
     # if train then set valid to False
     valid = False
     if not valid:
@@ -555,7 +555,7 @@ if __name__ == '__main__':
             model 1 is stride 1; model 2 is stride 2 (the required one)
             if you want to use pretrained model, please modify `load_model` to True
             """
-            for model_num in [1]: 
+            for model_num in [1, 2]: 
                 model = Model(lr=lr_test, batch_size=bz, use_model=model_num)
                 train_input, train_target = model.load_raw('train_data.pkl')
                 model.train(train_input, train_target, load_model=False, num_epochs=500, save_model=True, report_last=True)
