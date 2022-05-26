@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 import numpy as np
-import torch.nn.functional as F
-import warnings
-
 
 class HDRLoss(nn.Module):
 
@@ -31,9 +28,9 @@ class RampedLR(_LRScheduler):
 
     def get_lr(self):
         if not self._get_lr_called_within_step:
-            warnings.warn(
+            raise AssertionError(
                 "To get the last learning rate computed by the scheduler, "
-                "please use `get_last_lr()`.", UserWarning)
+                "please use `get_last_lr()`.")
 
         return [
             self.ramped_down(group['initial_lr'])
