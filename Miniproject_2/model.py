@@ -2,9 +2,9 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2022-5-17 09:23:08
-LastEditTime: 2022-05-25 19:43:48
+LastEditTime: 2022-06-08 11:40:17
 Description: Miniproject 2 implementation
-FilePath: /Pytorch-Noise2Noise/Miniproject_2/model.py
+FilePath: /project/Miniproject_2/model.py
 '''
 from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange
 import math
@@ -154,13 +154,13 @@ class Sequential(Module):
         grad_from_back = gradwrtoutput
         for layer in reversed(self.modules):
             grad_from_back = layer.backward(grad_from_back)
+        return grad_from_back
             
     def param(self):
         ret = []
         for layer in self.modules:
-            ret.append(layer.param()[0])
-            if len(layer.param()) > 1:
-                ret.append(layer.param()[1])
+            for item in layer.param():
+                ret.append(item)
         return ret
     
     def __call__(self, input):
@@ -380,15 +380,17 @@ class Model():
         else:
             # Model 2 in our report
             self.model = Sequential(
-            Conv2d(3, 32, 3, stride=2, padding=2),
-            ReLU(),
-            Conv2d(32, 64, 3, stride=2, padding=2),
-            ReLU(),
-            Upsampling(2, 64, 32, kernel_size=4, stride=1),
-            ReLU(),
-            Upsampling(2, 32, 3, stride=1, kernel_size=3),
-            Sigmoid()
-        ).to(self.device) 
+                Sequential(
+                    Conv2d(3, 32, 3, stride=2, padding=2),
+                    ReLU(),
+                    Conv2d(32, 64, 3, stride=2, padding=2),
+                    ReLU(),),
+                Sequential(
+                    Upsampling(2, 64, 32, kernel_size=4, stride=1),
+                    ReLU(),
+                    Upsampling(2, 32, 3, stride=1, kernel_size=3),
+                    Sigmoid())
+            ).to(self.device)
         
         self.optimizer = SGD(self.model.param(), lr)
         self.criterion = MSELoss()
@@ -555,12 +557,12 @@ if __name__ == '__main__':
             model 1 is stride 1; model 2 is stride 2 (the required one)
             if you want to use pretrained model, please modify `load_model` to True
             """
-            for model_num in [1, 2]: 
+            for model_num in [2]: 
                 model = Model(lr=lr_test, batch_size=bz, use_model=model_num)
                 train_input, train_target = model.load_raw('train_data.pkl')
                 model.train(train_input, train_target, load_model=False, num_epochs=500, save_model=True, report_last=True)
     else:
         print('Validating the model...')
-        model = Model(lr=lr_test, batch_size=16, use_model=1)
+        model = Model(lr=lr_test, batch_size=16, use_model=2)
         train_input, train_target = model.load_raw('train_data.pkl')
         model.train(train_input, train_target, load_model=True, num_epochs=0, save_model=False, report_last=True)
