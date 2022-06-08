@@ -2,9 +2,9 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2022-5-17 09:23:08
-LastEditTime: 2022-05-25 19:43:48
+LastEditTime: 2022-06-08 11:04:49
 Description: Miniproject 2 implementation
-FilePath: /Pytorch-Noise2Noise/Miniproject_2/model.py
+FilePath: /project/Miniproject_2/model.py
 '''
 from torch import empty, rand, repeat_interleave, zeros, exp, einsum, load, device, cuda, arange
 import math
@@ -154,6 +154,7 @@ class Sequential(Module):
         grad_from_back = gradwrtoutput
         for layer in reversed(self.modules):
             grad_from_back = layer.backward(grad_from_back)
+        return grad_from_back
             
     def param(self):
         ret = []
